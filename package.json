@@ -1,0 +1,21 @@
+{
+  "name": "start-monorepo",
+  "private": true,
+  "version": "1.0.0",
+  "workspaces": [
+    "apps/api",
+    "apps/web"
+  ],
+  "scripts": {
+    "build": "npm run build -w apps/api && npm run build -w apps/web",
+    "dev:api": "npm run dev -w apps/api",
+    "dev:web": "npm run dev -w apps/web",
+    "lint": "npm run lint -w apps/api && npm run lint -w apps/web",
+    "test": "npm run test -w apps/api",
+    "prisma:migrate": "npm run prisma:migrate -w apps/api",
+    "prisma:seed": "npm run prisma:seed -w apps/api"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

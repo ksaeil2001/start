@@ -1,0 +1,248 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  Student
+  Parent
+  Tutor
+}
+
+enum RelationshipType {
+  S_P @map("S-P")
+  S_T @map("S-T")
+  P_T @map("P-T")
+}
+
+enum AssignmentDifficulty {
+  E
+  M
+  H
+}
+
+enum AssignmentStatus {
+  Open
+  Submitted
+  Reviewed
+  Resubmitted
+  Finalized
+}
+
+enum SubmissionStatus {
+  Submitted
+  NeedsResubmit
+  Approved
+}
+
+enum SessionVisibility {
+  S
+  SP
+  ST
+  SPT
+}
+
+enum CalendarStatus {
+  Proposed
+  Confirmed
+  Rescheduled
+  Cancelled
+}
+
+enum InvoiceStatus {
+  Issued
+  Paid
+  Voided
+}
+
+model User {
+  id                     String          @id @default(cuid())
+  email                  String          @unique
+  passwordHash           String
+  role                   Role
+  name                   String
+  createdAt              DateTime        @default(now())
+  relationshipsA         Relationship[]  @relation("AUser")
+  relationshipsB         Relationship[]  @relation("BUser")
+  tutorAssignments       Assignment[]    @relation("TutorAssignments")
+  studentAssignments     Assignment[]    @relation("StudentAssignments")
+  submissions            Submission[]
+  tutorSessionNotes      SessionNote[]   @relation("TutorSessionNotes")
+  studentSessionNotes    SessionNote[]   @relation("StudentSessionNotes")
+  studentAttendance      AttendanceLog[] @relation("StudentAttendance")
+  tutorAttendance        AttendanceLog[] @relation("TutorAttendance")
+  invoices               Invoice[]       @relation("ParentInvoices")
+  reports                Report[]
+  encouragementsSent     Encouragement[] @relation("ParentEncouragements")
+  encouragementsReceived Encouragement[] @relation("StudentEncouragements")
+  notifications          Notification[]
+  auditLogs              AuditLog[]
+}
+
+model Relationship {
+  id        String           @id @default(cuid())
+  aUserId   String
+  bUserId   String
+  type      RelationshipType
+  consent   Boolean
+  createdAt DateTime         @default(now())
+  aUser     User             @relation("AUser", fields: [aUserId], references: [id])
+  bUser     User             @relation("BUser", fields: [bUserId], references: [id])
+}
+
+model Assignment {
+  id             String             @id @default(cuid())
+  tutorId        String
+  studentId      String
+  title          String
+  goal           String
+  difficulty     AssignmentDifficulty
+  dueAt          DateTime
+  rubricId       String?
+  modelAnswerRef String?
+  status         AssignmentStatus   @default(Open)
+  createdAt      DateTime           @default(now())
+  submissions    Submission[]
+  tutor          User               @relation("TutorAssignments", fields: [tutorId], references: [id])
+  student        User               @relation("StudentAssignments", fields: [studentId], references: [id])
+}
+
+model Submission {
+  id                    String           @id @default(cuid())
+  assignmentId          String
+  studentId             String
+  version               Int
+  files                 Json
+  coverMeta             Json
+  status                SubmissionStatus @default(Submitted)
+  rubricScore           Json?
+  comment               String?
+  requestedResubmit     Boolean          @default(false)
+  reviewDurationSeconds Int?
+  createdAt             DateTime         @default(now())
+  reviewedAt            DateTime?
+  assignment            Assignment       @relation(fields: [assignmentId], references: [id])
+  student               User             @relation(fields: [studentId], references: [id])
+}
+
+model SessionNote {
+  id              String            @id @default(cuid())
+  tutorId         String
+  studentId       String
+  date            DateTime
+  summary         String
+  issues          Json
+  nextActions     Json
+  visibilityScope SessionVisibility
+  createdAt       DateTime          @default(now())
+  tutor           User              @relation("TutorSessionNotes", fields: [tutorId], references: [id])
+  student         User              @relation("StudentSessionNotes", fields: [studentId], references: [id])
+}
+
+model AttendanceLog {
+  id                String        @id @default(cuid())
+  eventId           String?
+  sessionDate       DateTime
+  startTs           DateTime
+  endTs             DateTime
+  minutes           Int
+  studentId         String
+  tutorId           String
+  confirmedByParent Boolean       @default(false)
+  signatureTs       DateTime?
+  createdAt         DateTime      @default(now())
+  student           User          @relation("StudentAttendance", fields: [studentId], references: [id])
+  tutor             User          @relation("TutorAttendance", fields: [tutorId], references: [id])
+  event             CalendarEvent? @relation(fields: [eventId], references: [id])
+}
+
+model Invoice {
+  id       String        @id @default(cuid())
+  period   String
+  parentId String
+  lineItems Json
+  total    Decimal       @db.Decimal(10, 2)
+  status   InvoiceStatus @default(Issued)
+  issuedAt DateTime
+  paidAt   DateTime?
+  parent   User          @relation("ParentInvoices", fields: [parentId], references: [id])
+}
+
+model Report {
+  id        String   @id @default(cuid())
+  period    String
+  studentId String
+  KPIs      Json
+  highlights Json
+  nextPlan  Json
+  createdAt DateTime @default(now())
+  student   User     @relation(fields: [studentId], references: [id])
+}
+
+model CalendarEvent {
+  id           String         @id @default(cuid())
+  participants Json
+  start        DateTime
+  end          DateTime
+  status       CalendarStatus @default(Proposed)
+  policyRef    String?
+  createdAt    DateTime       @default(now())
+  tutorId      String?
+  studentId    String?
+  parentId     String?
+  attendance   AttendanceLog[]
+}
+
+model Policy {
+  id            String   @id @default(cuid())
+  title         String
+  rules         Json
+  version       Int
+  effectiveFrom DateTime
+  createdAt     DateTime @default(now())
+}
+
+model Encouragement {
+  id         String   @id @default(cuid())
+  studentId  String
+  parentId   String
+  templateId String?
+  message    String?
+  createdAt  DateTime @default(now())
+  student    User     @relation("StudentEncouragements", fields: [studentId], references: [id])
+  parent     User     @relation("ParentEncouragements", fields: [parentId], references: [id])
+}
+
+model VisibilitySetting {
+  id        String            @id @default(cuid())
+  entityRef String            @unique
+  scope     SessionVisibility
+  createdAt DateTime          @default(now())
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  actorId   String?
+  entity    String
+  entityId  String
+  action    String
+  fromState String?
+  toState   String?
+  metadata  Json?
+  createdAt DateTime @default(now())
+  actor     User?    @relation(fields: [actorId], references: [id])
+}
+
+model Notification {
+  id          String   @id @default(cuid())
+  recipientId String
+  type        String
+  payload     Json
+  createdAt   DateTime @default(now())
+  isRead      Boolean  @default(false)
+  recipient   User     @relation(fields: [recipientId], references: [id])
+}
